@@ -1,0 +1,37 @@
+services:
+  app:
+    build: ./app
+    container_name: memodrop
+    ports:
+      - "${MEMODROP_PORT:-8080}:8000"
+    environment:
+      WHISPER_URL: http://whisper:9000
+      WHISPER_LANGUAGE: ${WHISPER_LANGUAGE:-de}
+      WEBHOOK_TOKEN: ${WEBHOOK_TOKEN:-}
+      FORWARD_URL: ${FORWARD_URL:-}
+      FORWARD_TOKEN: ${FORWARD_TOKEN:-}
+      DEFAULT_RECIPIENT: ${DEFAULT_RECIPIENT:-}
+      AUTO_SEND: ${AUTO_SEND:-true}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
+      TZ: ${TZ:-Europe/Berlin}
+    volumes:
+      - ./data:/data
+    # extra_hosts:
+      # - "host.docker.internal:host-gateway"   # reach services on the Docker host (Linux)
+    depends_on:
+      - whisper
+    restart: unless-stopped
+
+  whisper:
+    # CPU image. For NVIDIA GPUs use :latest-gpu and add a GPU device reservation.
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    container_name: memodrop-whisper
+    environment:
+      ASR_ENGINE: faster_whisper
+      ASR_MODEL: ${WHISPER_MODEL:-small}
+    volumes:
+      - whisper-models:/root/.cache
+    restart: unless-stopped
+
+volumes:
+  whisper-models:

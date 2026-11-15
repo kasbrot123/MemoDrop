@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MemoDrop</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎙️</text></svg>">
+<style>
+  :root {
+    --bg: #f6f6f4; --card: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --border: #e4e4df; --accent: #3b5bdb; --accent-soft: #e7ecff;
+    --danger: #c92a2a; --warn: #e67700; --ok: #2b8a3e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141414; --card: #1e1e1e; --text: #ececea; --muted: #9a9a95;
+      --border: #2e2e2c; --accent: #7b93ff; --accent-soft: #252c48;
+      --danger: #ff6b6b; --warn: #ffa94d; --ok: #69db7c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 17px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg);
+           border-bottom: 1px solid var(--border); }
+  .bar { max-width: 760px; margin: 0 auto; padding: 12px 16px;
+         display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 23px; margin: 0; margin-right: auto; letter-spacing: -.01em; }
+  h1 span { color: var(--accent); }
+  .tabs { display: flex; gap: 4px; }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--border); background: var(--card);
+           color: var(--text); border-radius: 8px; padding: 6px 12px; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: var(--danger); }
+  button.tab.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  .count { font-size: 12px; color: var(--muted); margin-left: 4px; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; }
+  input[type=search] { width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border);
+                       background: var(--card); color: var(--text); font: inherit; margin-bottom: 14px; }
+  .note { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+          padding: 18px 20px 14px; margin-bottom: 14px; }
+  .meta { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted);
+          margin-bottom: 10px; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 1px 8px; border-radius: 99px; border: 1px solid currentColor; }
+  .badge.pending, .badge.processing { color: var(--warn); }
+  .badge.error { color: var(--danger); }
+  .badge.sent { color: var(--ok); }
+  .text { font-size: 20px; line-height: 1.55; white-space: pre-wrap; word-wrap: break-word;
+          cursor: text; min-height: 1.55em; }
+  .caption { font-size: 15px; color: var(--muted); border-left: 3px solid var(--accent-soft);
+             padding-left: 10px; margin-bottom: 8px; white-space: pre-wrap; }
+  .text.empty { color: var(--muted); font-style: italic; font-size: 17px; }
+  textarea { width: 100%; min-height: 140px; font: inherit; font-size: 20px; line-height: 1.55; padding: 10px;
+             border-radius: 8px; border: 1px solid var(--accent); background: var(--bg); color: var(--text);
+             resize: vertical; }
+  .actions { display: flex; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
+             flex-wrap: wrap; align-items: center; }
+  .actions button { font-size: 14px; padding: 5px 11px; }
+  .actions .spacer { flex: 1; }
+  .err { color: var(--danger); font-size: 14px; margin-top: 8px; }
+
+  /* compact audio player */
+  .player { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px 0 4px;
+            border: 1px solid var(--border); border-radius: 99px; background: var(--bg); min-width: 200px; }
+  .player audio { display: none; }
+  .actions .player .play { width: 26px; height: 26px; padding: 0; border: none; border-radius: 50%;
+            background: var(--accent); color: #fff; display: grid; place-items: center; flex: none; }
+  .player .play svg { width: 12px; height: 12px; fill: currentColor; }
+  .player .track { flex: 1; height: 4px; border-radius: 2px; background: var(--border); cursor: pointer;
+                   position: relative; min-width: 80px; }
+  .player .track::before { content: ""; position: absolute; inset: -8px 0; }  /* bigger hit area */
+  .player .fill { height: 100%; width: 0; border-radius: 2px; background: var(--accent); }
+  .player .time { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
+  @media (max-width: 520px) { .actions .spacer { display: none; } .player { flex: 1 1 100%; order: 10; } }
+  .empty-state { text-align: center; color: var(--muted); padding: 48px 0; }
+  .toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text);
+           color: var(--bg); padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s;
+           pointer-events: none; max-width: calc(100% - 32px); }
+  #toast.show { opacity: 1; }
+  .spinner { display: inline-block; width: 10px; height: 10px; border: 2px solid currentColor;
+             border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite;
+             vertical-align: -1px; margin-right: 4px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>Memo<span>Drop</span></h1>
+    <div class="tabs">
+      <button class="tab active" data-view="active">Notizen</button>
+      <button class="tab" data-view="trash">Papierkorb<span class="count" id="trashCount"></span></button>
+    </div>
+    <button class="primary" id="uploadBtn">+ Audio</button>
+    <input type="file" id="fileInput" accept="audio/*,video/*" multiple hidden>
+  </div>
+</header>
+
+<main>
+  <input type="search" id="search" placeholder="Notizen durchsuchen …">
+  <div class="toolbar" id="trashToolbar" hidden>
+    <button class="danger" id="emptyTrash">Papierkorb leeren</button>
+  </div>
+  <div id="list"></div>
+</main>
+<div id="toast"></div>
+
+<script>
+const state = { view: "active", notes: [], forward: false, editing: null, lastJson: "" };
+const $ = (s) => document.querySelector(s);
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2500);
+}
+function fmtDate(iso) {
+  const d = new Date(iso), diff = (Date.now() - d) / 1000;
+  const abs = d.toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" });
+  if (diff < 60) return "gerade eben";
+  if (diff < 3600) return `vor ${Math.floor(diff / 60)} Min.`;
+  if (diff < 86400) return `vor ${Math.floor(diff / 3600)} Std. · ${d.toLocaleTimeString("de-DE", { timeStyle: "short" })}`;
+  return abs;
+}
+async function api(path, opts = {}) {
+  const r = await fetch(path, opts);
+  if (!r.ok) {
+    let msg = r.statusText;
+    try { msg = (await r.json()).detail || msg; } catch {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+async function load() {
+  if (state.editing || isPlaying()) return;  // don't clobber an open editor or running playback
+  const data = await api(`/api/notes?view=${state.view}`);
+  $("#trashCount").textContent = data.trash_count ? ` ${data.trash_count}` : "";
+  const json = JSON.stringify(data.notes);
+  if (json === state.lastJson) return;
+  state.lastJson = json;
+  state.notes = data.notes;
+  render();
+}
+
+function render() {
+  const q = $("#search").value.trim().toLowerCase();
+  const notes = state.notes.filter((n) => !q || n.text.toLowerCase().includes(q));
+  $("#trashToolbar").hidden = state.view !== "trash" || !state.notes.length;
+  if (!notes.length) {
+    $("#list").innerHTML = `<div class="empty-state">${
+      q ? "Keine Treffer." : state.view === "trash" ? "Der Papierkorb ist leer." : "Noch keine Notizen. Schick eine Audiodatei an den Webhook oder lade eine hoch."
+    }</div>`;
+    return;
+  }
+  $("#list").innerHTML = notes.map(noteHtml).join("");
+}
+
+function noteHtml(n) {
+  const busy = n.status === "pending" || n.status === "processing";
+  const badge = busy
+    ? `<span class="badge ${n.status}"><span class="spinner"></span>${n.status === "pending" ? "In Warteschlange" : "Wird transkribiert"}</span>`
+    : n.status === "error" ? `<span class="badge error">Fehler</span>`
+    : n.sent_at ? `<span class="badge sent" title="${esc(fmtDate(n.sent_at))}">Gesendet</span>` : "";
+  const text = n.text
+    ? `<div class="text" data-edit="${n.id}">${esc(n.text)}</div>`
+    : `<div class="text empty">${busy ? "Transkription läuft …" : "(kein Text)"}</div>`;
+  const trash = state.view === "trash";
+  const player = `<div class="player">
+      <button class="play" data-play title="Abspielen">${ICON_PLAY}</button>
+      <div class="track" data-seek><div class="fill"></div></div>
+      <span class="time">0:00</span>
+      <audio preload="metadata" src="${n.audio_url}"></audio>
+    </div>`;
+  const actions = trash
+    ? `<button data-act="restore">Wiederherstellen</button>
+       <button data-act="delete" class="danger">Endgültig löschen</button>
+       <span class="spacer"></span>${player}`
+    : `<button data-act="copy" ${n.text ? "" : "disabled"}>Kopieren</button>
+       ${state.forward ? `<button data-act="send" ${n.text ? "" : "disabled"}>Senden</button>` : ""}
+       ${n.status === "error" || n.status === "done" ? `<button data-act="retranscribe">Neu transkribieren</button>` : ""}
+       <button data-act="trash" class="danger">Papierkorb</button>
+       <span class="spacer"></span>${player}`;
+  return `<article class="note" data-id="${n.id}">
+    <div class="meta"><span title="${esc(new Date(n.created_at).toLocaleString("de-DE"))}">${esc(fmtDate(n.created_at))}</span>${badge}</div>
+    ${n.caption ? `<div class="caption">${esc(n.caption)}</div>` : ""}
+    ${text}
+    ${n.error ? `<div class="err">${esc(n.error)}</div>` : ""}
+    <div class="actions">${actions}</div>
+  </article>`;
+}
+
+// ---- audio player
+const ICON_PLAY = `<svg viewBox="0 0 12 12"><path d="M2.5 1.2v9.6L10.5 6z"/></svg>`;
+const ICON_PAUSE = `<svg viewBox="0 0 12 12"><path d="M2 1h3v10H2zM7 1h3v10H7z"/></svg>`;
+const fmtTime = (s) => isFinite(s) ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}` : "0:00";
+const isPlaying = () => [...document.querySelectorAll(".player audio")].some((a) => !a.paused);
+
+function syncPlayer(audio) {
+  const p = audio.closest(".player");
+  if (!p) return;
+  const d = audio.duration;
+  p.querySelector(".fill").style.width = d ? `${(audio.currentTime / d) * 100}%` : "0";
+  p.querySelector(".time").textContent = fmtTime(audio.paused && !audio.currentTime ? d : audio.currentTime);
+  p.querySelector(".play").innerHTML = audio.paused ? ICON_PLAY : ICON_PAUSE;
+}
+["loadedmetadata", "timeupdate", "play", "pause", "ended"].forEach((ev) =>
+  $("#list").addEventListener(ev, (e) => {
+    if (ev === "ended") e.target.currentTime = 0;
+    syncPlayer(e.target);
+  }, true));
+
+function startEdit(el) {
+  const id = el.dataset.edit, note = state.notes.find((n) => n.id === id);
+  state.editing = id;
+  el.outerHTML = `<textarea data-editing="${id}">${esc(note.text)}</textarea>
+    <div class="actions"><button class="primary" data-act="save">Speichern</button><button data-act="cancel">Abbrechen</button></div>`;
+  const ta = document.querySelector(`[data-editing="${id}"]`);
+  ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+
+async function action(act, id, btn) {
+  const note = state.notes.find((n) => n.id === id);
+  try {
+    if (act === "copy") { await navigator.clipboard.writeText(note.text); toast("Text kopiert"); return; }
+    if (act === "cancel") { state.editing = null; state.lastJson = ""; render(); return; }
+    if (act === "save") {
+      const text = document.querySelector(`[data-editing="${id}"]`).value;
+      await api(`/api/notes/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+      state.editing = null; state.lastJson = ""; toast("Gespeichert");
+    }
+    if (act === "delete" && !confirm("Notiz und Audiodatei endgültig löschen?")) return;
+    btn.disabled = true;
+    if (act === "send") { await api(`/api/notes/${id}/send`, { method: "POST" }); toast("Gesendet"); }
+    if (act === "trash") { await api(`/api/notes/${id}/trash`, { method: "POST" }); toast("In den Papierkorb verschoben"); }
+    if (act === "restore") { await api(`/api/notes/${id}/restore`, { method: "POST" }); toast("Wiederhergestellt"); }
+    if (act === "delete") { await api(`/api/notes/${id}`, { method: "DELETE" }); toast("Gelöscht"); }
+    if (act === "retranscribe") { await api(`/api/notes/${id}/retranscribe`, { method: "POST" }); }
+  } catch (e) {
+    toast(e.message); btn.disabled = false; return;
+  }
+  await load();
+}
+
+$("#list").addEventListener("click", (e) => {
+  const play = e.target.closest("[data-play]");
+  if (play) {
+    const audio = play.parentElement.querySelector("audio");
+    document.querySelectorAll(".player audio").forEach((a) => a !== audio && a.pause());
+    audio.paused ? audio.play() : audio.pause();
+    return;
+  }
+  const seek = e.target.closest("[data-seek]");
+  if (seek) {
+    const audio = seek.parentElement.querySelector("audio"), r = seek.getBoundingClientRect();
+    if (audio.duration) audio.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * audio.duration;
+    return;
+  }
+  const btn = e.target.closest("button[data-act]");
+  if (btn) return action(btn.dataset.act, btn.closest(".note").dataset.id, btn);
+  const txt = e.target.closest("[data-edit]");
+  if (txt && state.view === "active" && !state.editing && !window.getSelection().toString()) startEdit(txt);
+});
+document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === t));
+  state.view = t.dataset.view; state.editing = null; state.lastJson = ""; load();
+}));
+$("#search").addEventListener("input", render);
+$("#emptyTrash").addEventListener("click", async () => {
+  if (!confirm("Alle Notizen im Papierkorb endgültig löschen?")) return;
+  await api("/api/trash", { method: "DELETE" }); toast("Papierkorb geleert"); load();
+});
+$("#uploadBtn").addEventListener("click", () => $("#fileInput").click());
+$("#fileInput").addEventListener("change", async (e) => {
+  for (const f of e.target.files) {
+    const fd = new FormData(); fd.append("file", f);
+    try { await api("/api/upload", { method: "POST", body: fd }); toast(`${f.name} hochgeladen`); }
+    catch (err) { toast(err.message); }
+  }
+  e.target.value = "";
+  if (state.view !== "active") document.querySelector('.tab[data-view="active"]').click(); else load();
+});
+
+api("/api/config").then((c) => { state.forward = c.forward_enabled; state.lastJson = ""; load(); });
+load();
+setInterval(() => load().catch(() => {}), 4000);
+</script>
+</body>
+</html>
