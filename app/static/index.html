@@ -224,10 +224,28 @@ function startEdit(el) {
   ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
 }
 
+// navigator.clipboard only exists in secure contexts (HTTPS / localhost).
+// Over plain http://<ip> fall back to a hidden textarea + execCommand.
+async function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try { await navigator.clipboard.writeText(text); return; } catch {}
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+  document.body.appendChild(ta);
+  ta.select();
+  ta.setSelectionRange(0, text.length);  // iOS
+  const ok = document.execCommand("copy");
+  ta.remove();
+  if (!ok) throw new Error("Kopieren nicht möglich");
+}
+
 async function action(act, id, btn) {
   const note = state.notes.find((n) => n.id === id);
   try {
-    if (act === "copy") { await navigator.clipboard.writeText(note.text); toast("Text kopiert"); return; }
+    if (act === "copy") { await copyText(note.text); toast("Text kopiert"); return; }
     if (act === "cancel") { state.editing = null; state.lastJson = ""; render(); return; }
     if (act === "save") {
       const text = document.querySelector(`[data-editing="${id}"]`).value;
