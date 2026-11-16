@@ -1,5 +1,8 @@
 # MemoDrop
 
+![Screenshot MemoDrop](media/Screenshot_MemoDrop.png)
+
+
 Nimmt Audiodateien per Webhook entgegen, transkribiert sie mit (Faster-)Whisper und zeigt sie als Notizliste an. Die neuesten Notizen stehen oben.
 
 ```
