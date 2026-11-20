@@ -150,7 +150,9 @@ async def transcribe(client: httpx.AsyncClient, note_id: str) -> None:
     log.info("Transcribed note %s (%d chars)", note_id, len(text))
 
     # Auto-send only the first time: a note that was already sent keeps its sent_at.
-    if AUTO_SEND and FORWARD_URL and note["sent_at"] is None and text.strip():
+    # Notes without a recipient (web uploads/recordings, no DEFAULT_RECIPIENT) are not auto-sent.
+    has_recipient = bool(note["sender"] or DEFAULT_RECIPIENT)
+    if AUTO_SEND and FORWARD_URL and has_recipient and note["sent_at"] is None and text.strip():
         try:
             await forward_note(client, note_id)
         except Exception as exc:  # noqa: BLE001

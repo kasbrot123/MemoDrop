@@ -35,6 +35,12 @@
   button.danger { color: var(--danger); }
   button.tab.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
   button:disabled { opacity: .5; cursor: default; }
+  button.rec { background: #e03131; border-color: #e03131; color: #fff; display: inline-flex;
+               align-items: center; gap: 7px; font-variant-numeric: tabular-nums; }
+  button.rec:hover { background: #c92a2a; border-color: #c92a2a; }
+  button.rec .dot { width: 10px; height: 10px; border-radius: 50%; background: #fff; }
+  button.rec.recording .dot { border-radius: 2px; animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
   .count { font-size: 12px; color: var(--muted); margin-left: 4px; }
   main { max-width: 760px; margin: 0 auto; padding: 16px; }
   input[type=search] { width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border);
@@ -95,6 +101,7 @@
       <button class="tab" data-view="trash">Papierkorb<span class="count" id="trashCount"></span></button>
     </div>
     <button class="primary" id="uploadBtn">+ Audio</button>
+    <button class="rec" id="recBtn" title="Mit dem Mikrofon aufnehmen"><span class="dot"></span><span id="recLabel">Record</span></button>
     <input type="file" id="fileInput" accept="audio/*,video/*" multiple hidden>
   </div>
 </header>
@@ -302,6 +309,58 @@ $("#fileInput").addEventListener("change", async (e) => {
   }
   e.target.value = "";
   if (state.view !== "active") document.querySelector('.tab[data-view="active"]').click(); else load();
+});
+
+// ---- microphone recording
+const rec = { recorder: null, chunks: [], start: 0, timer: null };
+
+function pickMime() {
+  const types = ["audio/webm;codecs=opus", "audio/mp4", "audio/ogg;codecs=opus", "audio/webm"];
+  return types.find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || "";
+}
+
+async function uploadBlob(blob, name) {
+  const fd = new FormData(); fd.append("file", blob, name);
+  await api("/api/upload", { method: "POST", body: fd });
+}
+
+function setRecUi(on) {
+  $("#recBtn").classList.toggle("recording", on);
+  clearInterval(rec.timer);
+  if (!on) { $("#recLabel").textContent = "Record"; return; }
+  const tick = () => { $("#recLabel").textContent = `Stop ${fmtTime((Date.now() - rec.start) / 1000)}`; };
+  tick(); rec.timer = setInterval(tick, 500);
+}
+
+$("#recBtn").addEventListener("click", async () => {
+  if (rec.recorder) { rec.recorder.stop(); return; }
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    toast(window.isSecureContext ? "Aufnahme wird von diesem Browser nicht unterstützt"
+                                 : "Aufnahme braucht HTTPS oder localhost");
+    return;
+  }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { toast("Kein Zugriff auf das Mikrofon"); return; }
+
+  const mime = pickMime();
+  const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  rec.recorder = recorder; rec.chunks = []; rec.start = Date.now();
+  recorder.ondataavailable = (e) => e.data.size && rec.chunks.push(e.data);
+  recorder.onstop = async () => {
+    stream.getTracks().forEach((t) => t.stop());
+    rec.recorder = null; setRecUi(false);
+    const type = recorder.mimeType || mime || "audio/webm";
+    const ext = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : "webm";
+    const blob = new Blob(rec.chunks, { type });
+    if (!blob.size) { toast("Aufnahme war leer"); return; }
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    try { await uploadBlob(blob, `aufnahme-${stamp}.${ext}`); toast("Aufnahme hochgeladen"); }
+    catch (err) { toast(err.message); }
+    if (state.view !== "active") document.querySelector('.tab[data-view="active"]').click(); else { state.lastJson = ""; load(); }
+  };
+  recorder.start();
+  setRecUi(true);
 });
 
 api("/api/config").then((c) => { state.forward = c.forward_enabled; state.lastJson = ""; load(); });
